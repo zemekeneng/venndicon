@@ -2,7 +2,7 @@
 var w, h, draw, empty1,  empty2, empty3, empty3a, empty3b,
      rect, cir1, cir2, cir3, ci12, ci13, ci23, c123
 
-h = 350
+h = 500
 
 var cx1, cx2, cx3,
     cy1, cy2, cy3,
