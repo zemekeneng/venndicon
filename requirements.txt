@@ -1,9 +1,11 @@
 # Core dependencies
 svgwrite>=1.4.0
 
-# Raster export (PNG/JPEG)
+# Raster export and image analysis
 cairosvg>=2.5.0
 Pillow>=8.0.0
+numpy>=1.20.0
+scipy>=1.7.0
 
 # Notebook support
 jupyter

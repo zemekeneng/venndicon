@@ -65,6 +65,522 @@ def _svg_to_jpeg_bytes(svg_string: str, scale: float = 1.0, quality: int = 90) -
     return jpeg_buffer.getvalue()
 
 
+def _load_image(source) -> "Image.Image":
+    """Load an image from various sources.
+    
+    Args:
+        source: Can be a file path (str), PIL Image, Venndicon, or VenndiconGrid.
+    
+    Returns:
+        PIL Image object.
+    """
+    if not HAS_PIL:
+        raise ImportError(
+            "Pillow is required for image analysis. "
+            "Install it with: pip install Pillow"
+        )
+    
+    # If it's already a PIL Image
+    if isinstance(source, Image.Image):
+        return source
+    
+    # If it's a Venndicon or VenndiconGrid (has to_svg method)
+    if hasattr(source, 'to_svg'):
+        _check_raster_deps()
+        png_bytes = cairosvg.svg2png(bytestring=source.to_svg().encode('utf-8'))
+        return Image.open(io.BytesIO(png_bytes))
+    
+    # If it's a file path
+    if isinstance(source, str):
+        if source.lower().endswith('.svg'):
+            _check_raster_deps()
+            with open(source, 'r') as f:
+                svg_content = f.read()
+            png_bytes = cairosvg.svg2png(bytestring=svg_content.encode('utf-8'))
+            return Image.open(io.BytesIO(png_bytes))
+        else:
+            return Image.open(source)
+    
+    raise ValueError(f"Cannot load image from {type(source)}")
+
+
+class QuadrantColors:
+    """Container for quadrant color analysis results."""
+    
+    def __init__(self, top_left, top_right, bottom_left, bottom_right):
+        self.top_left = top_left
+        self.top_right = top_right
+        self.bottom_left = bottom_left
+        self.bottom_right = bottom_right
+    
+    def __repr__(self):
+        return (
+            f"QuadrantColors(\n"
+            f"  top_left={self.top_left},\n"
+            f"  top_right={self.top_right},\n"
+            f"  bottom_left={self.bottom_left},\n"
+            f"  bottom_right={self.bottom_right}\n"
+            f")"
+        )
+    
+    def to_dict(self):
+        """Return as dictionary."""
+        return {
+            'top_left': self.top_left,
+            'top_right': self.top_right,
+            'bottom_left': self.bottom_left,
+            'bottom_right': self.bottom_right,
+        }
+    
+    def to_hex(self):
+        """Return colors as hex strings."""
+        def rgb_to_hex(rgb):
+            return f"#{rgb[0]:02x}{rgb[1]:02x}{rgb[2]:02x}"
+        return {
+            'top_left': rgb_to_hex(self.top_left),
+            'top_right': rgb_to_hex(self.top_right),
+            'bottom_left': rgb_to_hex(self.bottom_left),
+            'bottom_right': rgb_to_hex(self.bottom_right),
+        }
+
+
+def analyze_quadrants(source) -> QuadrantColors:
+    """Analyze a square image and calculate average RGB for each quadrant.
+    
+    Divides the image into 4 quadrants:
+    - top_left: upper-left quarter
+    - top_right: upper-right quarter
+    - bottom_left: lower-left quarter
+    - bottom_right: lower-right quarter
+    
+    Args:
+        source: Image source - can be:
+            - File path (str) to JPEG, PNG, or SVG
+            - PIL Image object
+            - Venndicon instance
+            - VenndiconGrid instance
+    
+    Returns:
+        QuadrantColors object with average RGB tuples for each quadrant.
+    
+    Example:
+        >>> from venndicon import generate, analyze_quadrants
+        >>> icon = generate(seed=42)
+        >>> colors = analyze_quadrants(icon)
+        >>> print(colors.top_left)  # (r, g, b)
+        >>> print(colors.to_hex())  # {'top_left': '#abc123', ...}
+    """
+    import numpy as np
+    
+    # Load the image
+    img = _load_image(source)
+    
+    # Convert to RGB if necessary
+    if img.mode == 'RGBA':
+        background = Image.new('RGB', img.size, (255, 255, 255))
+        background.paste(img, mask=img.split()[3])
+        img = background
+    elif img.mode != 'RGB':
+        img = img.convert('RGB')
+    
+    # Get dimensions
+    width, height = img.size
+    
+    # Calculate midpoints
+    mid_x = width // 2
+    mid_y = height // 2
+    
+    # Convert to numpy array for efficient calculation
+    pixels = np.array(img)
+    
+    # Extract quadrants
+    top_left = pixels[0:mid_y, 0:mid_x]
+    top_right = pixels[0:mid_y, mid_x:width]
+    bottom_left = pixels[mid_y:height, 0:mid_x]
+    bottom_right = pixels[mid_y:height, mid_x:width]
+    
+    # Calculate average RGB for each quadrant
+    def avg_rgb(quadrant):
+        avg = quadrant.mean(axis=(0, 1))
+        return (int(round(avg[0])), int(round(avg[1])), int(round(avg[2])))
+    
+    return QuadrantColors(
+        top_left=avg_rgb(top_left),
+        top_right=avg_rgb(top_right),
+        bottom_left=avg_rgb(bottom_left),
+        bottom_right=avg_rgb(bottom_right),
+    )
+
+
+class ImageGridAnalysis:
+    """Container for image grid analysis results."""
+    
+    def __init__(self, cols: int, rows: int, cell_size: int, cells: list):
+        self.cols = cols
+        self.rows = rows
+        self.cell_size = cell_size
+        self.cells = cells  # 2D list of QuadrantColors [row][col]
+    
+    def __repr__(self):
+        return f"ImageGridAnalysis(cols={self.cols}, rows={self.rows}, cell_size={self.cell_size}px, total_cells={self.cols * self.rows})"
+    
+    def get(self, col: int, row: int) -> QuadrantColors:
+        """Get QuadrantColors for a specific cell."""
+        return self.cells[row][col]
+    
+    def to_dict(self):
+        """Return all cells as nested dictionaries."""
+        result = []
+        for row in range(self.rows):
+            row_data = []
+            for col in range(self.cols):
+                row_data.append({
+                    'col': col,
+                    'row': row,
+                    'quadrants': self.cells[row][col].to_hex()
+                })
+            result.append(row_data)
+        return result
+    
+    def flat(self):
+        """Return all cells as a flat list with coordinates."""
+        result = []
+        for row in range(self.rows):
+            for col in range(self.cols):
+                result.append({
+                    'col': col,
+                    'row': row,
+                    'quadrants': self.cells[row][col]
+                })
+        return result
+
+
+def analyze_image_grid(source, cols: int, rows: int) -> ImageGridAnalysis:
+    """Analyze an image by dividing it into a grid of squares.
+    
+    The image is cropped to fit the grid dimensions exactly, centered on
+    the original image. Each cell is then analyzed for quadrant colors.
+    
+    Args:
+        source: Image source - file path (str) or PIL Image.
+        cols: Number of columns (squares across).
+        rows: Number of rows (squares down).
+    
+    Returns:
+        ImageGridAnalysis object containing QuadrantColors for each cell.
+    
+    Example:
+        >>> from venndicon import analyze_image_grid
+        >>> result = analyze_image_grid("photo.jpg", cols=10, rows=12)
+        >>> print(result)  # ImageGridAnalysis(cols=10, rows=12, ...)
+        >>> cell = result.get(5, 3)  # Get cell at column 5, row 3
+        >>> print(cell.to_hex())  # Quadrant colors for that cell
+    """
+    import numpy as np
+    
+    if not HAS_PIL:
+        raise ImportError(
+            "Pillow is required for image analysis. "
+            "Install it with: pip install Pillow"
+        )
+    
+    # Load the image
+    if isinstance(source, str):
+        img = Image.open(source)
+    elif isinstance(source, Image.Image):
+        img = source
+    else:
+        raise ValueError(f"source must be a file path or PIL Image, got {type(source)}")
+    
+    # Convert to RGB if necessary
+    if img.mode == 'RGBA':
+        background = Image.new('RGB', img.size, (255, 255, 255))
+        background.paste(img, mask=img.split()[3])
+        img = background
+    elif img.mode != 'RGB':
+        img = img.convert('RGB')
+    
+    width, height = img.size
+    
+    # Calculate the largest square size that fits the grid
+    cell_size_from_width = width // cols
+    cell_size_from_height = height // rows
+    cell_size = min(cell_size_from_width, cell_size_from_height)
+    
+    if cell_size < 1:
+        raise ValueError(f"Image too small for {cols}x{rows} grid. Image is {width}x{height}.")
+    
+    # Calculate total grid size
+    grid_width = cell_size * cols
+    grid_height = cell_size * rows
+    
+    # Calculate crop offsets to center the grid
+    offset_x = (width - grid_width) // 2
+    offset_y = (height - grid_height) // 2
+    
+    # Crop the image to the grid area
+    img_cropped = img.crop((offset_x, offset_y, offset_x + grid_width, offset_y + grid_height))
+    pixels = np.array(img_cropped)
+    
+    # Analyze each cell
+    cells = []
+    for row in range(rows):
+        row_cells = []
+        for col in range(cols):
+            # Extract the cell
+            x1 = col * cell_size
+            y1 = row * cell_size
+            x2 = x1 + cell_size
+            y2 = y1 + cell_size
+            
+            cell_pixels = pixels[y1:y2, x1:x2]
+            
+            # Calculate quadrant boundaries within the cell
+            mid_x = cell_size // 2
+            mid_y = cell_size // 2
+            
+            top_left = cell_pixels[0:mid_y, 0:mid_x]
+            top_right = cell_pixels[0:mid_y, mid_x:cell_size]
+            bottom_left = cell_pixels[mid_y:cell_size, 0:mid_x]
+            bottom_right = cell_pixels[mid_y:cell_size, mid_x:cell_size]
+            
+            def avg_rgb(quadrant):
+                if quadrant.size == 0:
+                    return (0, 0, 0)
+                avg = quadrant.mean(axis=(0, 1))
+                return (int(round(avg[0])), int(round(avg[1])), int(round(avg[2])))
+            
+            quadrant_colors = QuadrantColors(
+                top_left=avg_rgb(top_left),
+                top_right=avg_rgb(top_right),
+                bottom_left=avg_rgb(bottom_left),
+                bottom_right=avg_rgb(bottom_right),
+            )
+            row_cells.append(quadrant_colors)
+        cells.append(row_cells)
+    
+    return ImageGridAnalysis(cols=cols, rows=rows, cell_size=cell_size, cells=cells)
+
+
+def _quadrant_color_distance(q1: QuadrantColors, q2: QuadrantColors) -> float:
+    """Calculate squared color distance between two QuadrantColors.
+    
+    Returns sum of squared RGB differences for all 4 quadrants.
+    """
+    def rgb_dist_sq(c1, c2):
+        return (c1[0] - c2[0])**2 + (c1[1] - c2[1])**2 + (c1[2] - c2[2])**2
+    
+    return (
+        rgb_dist_sq(q1.top_left, q2.top_left) +
+        rgb_dist_sq(q1.top_right, q2.top_right) +
+        rgb_dist_sq(q1.bottom_left, q2.bottom_left) +
+        rgb_dist_sq(q1.bottom_right, q2.bottom_right)
+    )
+
+
+class MatchedGrid:
+    """Result of matching Venndicons to an image grid.
+    
+    Contains both the original (seed order) and matched (optimized) arrangements
+    of the exact same set of Venndicons.
+    """
+    
+    def __init__(
+        self, 
+        cols: int, 
+        rows: int, 
+        cell_size: int,
+        venndicons: list,
+        assignment: list,
+        total_distance: float,
+        image_analysis: ImageGridAnalysis,
+        original_venndicons: list = None,
+        start_seed: int = None,
+    ):
+        self.cols = cols
+        self.rows = rows
+        self.cell_size = cell_size
+        self.venndicons = venndicons  # 2D list [row][col] of Venndicon objects (matched order)
+        self.assignment = assignment  # List of (venndicon_index, image_cell_index) pairs
+        self.total_distance = total_distance
+        self.image_analysis = image_analysis
+        self._original_venndicons = original_venndicons  # Flat list in original seed order
+        self.start_seed = start_seed
+    
+    def __repr__(self):
+        return (
+            f"MatchedGrid(cols={self.cols}, rows={self.rows}, "
+            f"total_distance={self.total_distance:.0f})"
+        )
+    
+    def get(self, col: int, row: int) -> "Venndicon":
+        """Get the Venndicon at a specific grid position in the matched arrangement."""
+        return self.venndicons[row][col]
+    
+    def original_grid(self, gap: int = 5, background: str = "#222222") -> "VenndiconGrid":
+        """Create a VenndiconGrid with the original seed order.
+        
+        Args:
+            gap: Gap between cells in pixels.
+            background: Background color for the grid.
+        
+        Returns:
+            VenndiconGrid with icons in original seed order.
+        """
+        grid_obj = VenndiconGrid.__new__(VenndiconGrid)
+        grid_obj.rows = self.rows
+        grid_obj.cols = self.cols
+        grid_obj.cell_size = self.cell_size
+        grid_obj.gap = gap
+        grid_obj.background = background
+        grid_obj.start_seed = self.start_seed
+        grid_obj._uid = uuid.uuid4().hex[:8]
+        grid_obj.icons = list(self._original_venndicons)  # Copy original order
+        return grid_obj
+    
+    def to_grid(self, gap: int = 5, background: str = "#222222") -> "VenndiconGrid":
+        """Create a VenndiconGrid from the matched (optimized) arrangement.
+        
+        Args:
+            gap: Gap between cells in pixels.
+            background: Background color for the grid.
+        
+        Returns:
+            VenndiconGrid with icons arranged optimally to match the image.
+        """
+        grid_obj = VenndiconGrid.__new__(VenndiconGrid)
+        grid_obj.rows = self.rows
+        grid_obj.cols = self.cols
+        grid_obj.cell_size = self.cell_size
+        grid_obj.gap = gap
+        grid_obj.background = background
+        grid_obj.start_seed = None
+        grid_obj._uid = uuid.uuid4().hex[:8]
+        
+        # Flatten the 2D venndicons list (matched order)
+        grid_obj.icons = []
+        for row in range(self.rows):
+            for col in range(self.cols):
+                grid_obj.icons.append(self.venndicons[row][col])
+        
+        return grid_obj
+    
+    def save_comparison(self, filename: str, gap: int = 5):
+        """Save the matched grid to a file."""
+        grid_obj = self.to_grid(gap=gap)
+        grid_obj.save(filename)
+
+
+def match_venndicons_to_image(
+    image_source,
+    cols: int,
+    rows: int,
+    start_seed: int = 0,
+    cell_size: int = 100,
+) -> MatchedGrid:
+    """Match Venndicons to an image grid by minimizing color distance.
+    
+    Generates exactly (rows × cols) Venndicons with sequential seeds, then uses
+    the Hungarian algorithm to find the optimal rearrangement that minimizes
+    the total squared color distance between Venndicon quadrants and image
+    cell quadrants.
+    
+    The matched grid contains the EXACT SAME Venndicons as the original grid,
+    just rearranged to better match the image colors.
+    
+    Args:
+        image_source: Image to match - file path (str) or PIL Image.
+        cols: Number of columns in the grid.
+        rows: Number of rows in the grid.
+        start_seed: Starting seed for generating Venndicons.
+        cell_size: Size of each Venndicon in the output grid.
+    
+    Returns:
+        MatchedGrid object with optimally arranged Venndicons.
+    
+    Example:
+        >>> from venndicon import match_venndicons_to_image
+        >>> result = match_venndicons_to_image("photo.jpg", cols=5, rows=5)
+        >>> original = result.original_grid()  # Original seed order
+        >>> matched = result.to_grid()         # Optimized arrangement
+    """
+    import numpy as np
+    
+    try:
+        from scipy.optimize import linear_sum_assignment
+    except ImportError:
+        raise ImportError(
+            "scipy is required for Venndicon matching. "
+            "Install it with: pip install scipy"
+        )
+    
+    # Analyze the image
+    image_analysis = analyze_image_grid(image_source, cols=cols, rows=rows)
+    
+    num_cells = cols * rows
+    
+    # Generate exactly num_cells Venndicons (one for each cell)
+    venndicons = []
+    venndicon_colors = []
+    
+    for i in range(num_cells):
+        v = Venndicon(size=cell_size, seed=start_seed + i)
+        venndicons.append(v)
+        # Analyze the venndicon's quadrant colors
+        colors = analyze_quadrants(v)
+        venndicon_colors.append(colors)
+    
+    # Get image cell colors as flat list
+    image_colors = []
+    for row in range(rows):
+        for col in range(cols):
+            image_colors.append(image_analysis.get(col, row))
+    
+    # Build cost matrix: cost[i][j] = distance from venndicon i to image cell j
+    # This is a square matrix since we have exactly num_cells venndicons and num_cells positions
+    cost_matrix = np.zeros((num_cells, num_cells))
+    
+    for i, v_colors in enumerate(venndicon_colors):
+        for j, img_colors in enumerate(image_colors):
+            cost_matrix[i, j] = _quadrant_color_distance(v_colors, img_colors)
+    
+    # Solve assignment problem using Hungarian algorithm
+    # This finds the optimal permutation of venndicons to image cells
+    venndicon_indices, cell_indices = linear_sum_assignment(cost_matrix)
+    
+    # Create mapping: cell_position -> venndicon_index
+    cell_to_venndicon = {}
+    for v_idx, cell_idx in zip(venndicon_indices, cell_indices):
+        cell_to_venndicon[cell_idx] = v_idx
+    
+    # Build 2D grid of venndicons in the matched order
+    venndicons_2d = []
+    total_distance = 0
+    assignment = []
+    
+    for row in range(rows):
+        row_venndicons = []
+        for col in range(cols):
+            cell_idx = row * cols + col
+            venndicon_idx = cell_to_venndicon[cell_idx]
+            row_venndicons.append(venndicons[venndicon_idx])
+            assignment.append((venndicon_idx, cell_idx))
+            total_distance += cost_matrix[venndicon_idx, cell_idx]
+        venndicons_2d.append(row_venndicons)
+    
+    return MatchedGrid(
+        cols=cols,
+        rows=rows,
+        cell_size=cell_size,
+        venndicons=venndicons_2d,
+        assignment=assignment,
+        total_distance=total_distance,
+        image_analysis=image_analysis,
+        original_venndicons=venndicons,  # Store original order
+        start_seed=start_seed,
+    )
+
+
 def random_color() -> str:
     """Generate a random hex color."""
     r = random.randint(1, 255)
