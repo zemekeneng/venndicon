@@ -471,12 +471,35 @@ class MatchedGrid:
         grid_obj.save(filename)
 
 
+def _extract_color_palette(image_analysis: ImageGridAnalysis) -> list:
+    """Extract all colors from image analysis as a palette.
+    
+    Returns a list of RGB tuples from all quadrants of all cells.
+    """
+    palette = []
+    for row in range(image_analysis.rows):
+        for col in range(image_analysis.cols):
+            q = image_analysis.get(col, row)
+            palette.append(q.top_left)
+            palette.append(q.top_right)
+            palette.append(q.bottom_left)
+            palette.append(q.bottom_right)
+    return palette
+
+
+def _sample_color_from_palette(palette: list, rng) -> str:
+    """Sample a color from the palette and return as hex string."""
+    rgb = rng.choice(palette)
+    return f"#{rgb[0]:02x}{rgb[1]:02x}{rgb[2]:02x}"
+
+
 def match_venndicons_to_image(
     image_source,
     cols: int,
     rows: int,
     start_seed: int = 0,
     cell_size: int = 100,
+    use_image_colors: bool = True,
 ) -> MatchedGrid:
     """Match Venndicons to an image grid by minimizing color distance.
     
@@ -494,6 +517,9 @@ def match_venndicons_to_image(
         rows: Number of rows in the grid.
         start_seed: Starting seed for generating Venndicons.
         cell_size: Size of each Venndicon in the output grid.
+        use_image_colors: If True, Venndicon colors are sampled from the
+                         image's color palette instead of being fully random.
+                         This produces much better matching results.
     
     Returns:
         MatchedGrid object with optimally arranged Venndicons.
@@ -519,12 +545,27 @@ def match_venndicons_to_image(
     
     num_cells = cols * rows
     
+    # Extract color palette from the image if using image colors
+    palette = None
+    if use_image_colors:
+        palette = _extract_color_palette(image_analysis)
+    
     # Generate exactly num_cells Venndicons (one for each cell)
     venndicons = []
     venndicon_colors = []
     
     for i in range(num_cells):
-        v = Venndicon(size=cell_size, seed=start_seed + i)
+        seed = start_seed + i
+        
+        if use_image_colors and palette:
+            # Generate colors sampled from the image palette
+            rng = np.random.default_rng(seed)
+            colors = [_sample_color_from_palette(palette, rng) for _ in range(8)]
+            v = Venndicon(size=cell_size, seed=seed, colors=colors)
+        else:
+            # Use fully random colors
+            v = Venndicon(size=cell_size, seed=seed)
+        
         venndicons.append(v)
         # Analyze the venndicon's quadrant colors
         colors = analyze_quadrants(v)
