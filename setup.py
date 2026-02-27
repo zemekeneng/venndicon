@@ -15,5 +15,10 @@ setup(
         "all": ["jupyter", "ipython", "cairosvg>=2.5.0", "Pillow>=8.0.0"],
     },
     python_requires=">=3.7",
+    entry_points={
+        "console_scripts": [
+            "venndicon=venndicon.cli:main",
+        ],
+    },
 )
 

@@ -3,7 +3,7 @@
 import io
 import random
 import uuid
-from typing import Optional
+from typing import Optional, Union, List
 import svgwrite
 
 # Optional dependencies for raster export
@@ -494,44 +494,58 @@ def _sample_color_from_palette(palette: list, rng) -> str:
 
 
 def match_venndicons_to_image(
-    image_source,
+    image_sources,
     cols: int,
     rows: int,
     start_seed: int = 0,
     cell_size: int = 100,
     use_image_colors: bool = True,
-) -> MatchedGrid:
-    """Match Venndicons to an image grid by minimizing color distance.
+) -> Union[MatchedGrid, List[MatchedGrid]]:
+    """Match Venndicons to one or more images by minimizing color distance.
     
-    Generates exactly (rows × cols) Venndicons with sequential seeds, then uses
-    the Hungarian algorithm to find the optimal rearrangement that minimizes
-    the total squared color distance between Venndicon quadrants and image
-    cell quadrants.
+    Generates a shared pool of Venndicons with sequential seeds, then uses the
+    Hungarian algorithm to find the optimal arrangement for each image that
+    minimizes total squared color distance between Venndicon quadrants and
+    image cell quadrants.
     
-    The matched grid contains the EXACT SAME Venndicons as the original grid,
-    just rearranged to better match the image colors.
+    When multiple images are provided:
+    - The combined color distribution of all images is used when
+      use_image_colors=True.
+    - A single shared pool of Venndicons is created (sized for the largest grid).
+    - Each image gets its own optimal arrangement from that pool.
+    - If images have different dimensions, grid sizes are computed per-image
+      to preserve aspect ratio without distortion (using the first image's
+      cell density as reference). Excess Venndicons are discarded to maintain
+      perfect rectangles.
     
     Args:
-        image_source: Image to match - file path (str) or PIL Image.
-        cols: Number of columns in the grid.
-        rows: Number of rows in the grid.
+        image_sources: Image(s) to match - a single source (file path or PIL
+                       Image) or a list of sources.
+        cols: Number of columns for the first image's grid (other images
+              derive their grid from this density and their own aspect ratio).
+        rows: Number of rows for the first image's grid.
         start_seed: Starting seed for generating Venndicons.
         cell_size: Size of each Venndicon in the output grid.
         use_image_colors: If True, Venndicon colors are sampled from the
-                         image's color palette instead of being fully random.
-                         This produces much better matching results.
+                         combined color palette of all images.
     
     Returns:
-        MatchedGrid object with optimally arranged Venndicons.
+        A single MatchedGrid if one image is provided, or a list of
+        MatchedGrid objects (one per image) if multiple images are provided.
     
     Example:
         >>> from venndicon import match_venndicons_to_image
         >>> result = match_venndicons_to_image("photo.jpg", cols=5, rows=5)
-        >>> original = result.original_grid()  # Original seed order
-        >>> matched = result.to_grid()         # Optimized arrangement
+        >>> matched = result.to_grid()
+        >>>
+        >>> results = match_venndicons_to_image(
+        ...     ["mom.jpg", "dad.jpg"], cols=10, rows=12
+        ... )
+        >>> for r in results:
+        ...     r.to_grid().save_jpeg("out.jpg")
     """
     import numpy as np
-    
+
     try:
         from scipy.optimize import linear_sum_assignment
     except ImportError:
@@ -539,87 +553,116 @@ def match_venndicons_to_image(
             "scipy is required for Venndicon matching. "
             "Install it with: pip install scipy"
         )
-    
-    # Analyze the image
-    image_analysis = analyze_image_grid(image_source, cols=cols, rows=rows)
-    
-    num_cells = cols * rows
-    
-    # Extract color palette from the image if using image colors
+
+    single_image = not isinstance(image_sources, (list, tuple))
+    if single_image:
+        image_sources = [image_sources]
+
+    if not image_sources:
+        raise ValueError("At least one image source is required")
+
+    # Load all images to get their dimensions
+    pil_images = [_load_image(src) for src in image_sources]
+
+    # First image defines the reference pixel-cell size; subsequent images
+    # derive their grid dimensions from this to keep cell density consistent.
+    first_w, first_h = pil_images[0].size
+    pixel_cell_size = min(first_w / cols, first_h / rows)
+
+    grid_specs = []  # (cols, rows) per image
+    for i, img in enumerate(pil_images):
+        if i == 0:
+            grid_specs.append((cols, rows))
+        else:
+            w, h = img.size
+            img_cols = max(1, int(w / pixel_cell_size))
+            img_rows = max(1, int(h / pixel_cell_size))
+            grid_specs.append((img_cols, img_rows))
+
+    max_cells = max(c * r for c, r in grid_specs)
+
+    # Analyze every image at its own grid dimensions
+    image_analyses = []
+    for img, (g_cols, g_rows) in zip(pil_images, grid_specs):
+        image_analyses.append(analyze_image_grid(img, cols=g_cols, rows=g_rows))
+
+    # Build a combined color palette from ALL images
     palette = None
     if use_image_colors:
-        palette = _extract_color_palette(image_analysis)
-    
-    # Generate exactly num_cells Venndicons (one for each cell)
+        palette = []
+        for analysis in image_analyses:
+            palette.extend(_extract_color_palette(analysis))
+
+    # Generate the shared pool of Venndicons (enough for the largest grid)
     venndicons = []
-    venndicon_colors = []
-    
-    for i in range(num_cells):
+    venndicon_quad_colors = []
+    for i in range(max_cells):
         seed = start_seed + i
-        
         if use_image_colors and palette:
-            # Generate colors sampled from the image palette
             rng = np.random.default_rng(seed)
-            colors = [_sample_color_from_palette(palette, rng) for _ in range(8)]
-            v = Venndicon(size=cell_size, seed=seed, colors=colors)
+            v_colors = [_sample_color_from_palette(palette, rng) for _ in range(8)]
+            v = Venndicon(size=cell_size, seed=seed, colors=v_colors)
         else:
-            # Use fully random colors
             v = Venndicon(size=cell_size, seed=seed)
-        
         venndicons.append(v)
-        # Analyze the venndicon's quadrant colors
-        colors = analyze_quadrants(v)
-        venndicon_colors.append(colors)
-    
-    # Get image cell colors as flat list
-    image_colors = []
-    for row in range(rows):
-        for col in range(cols):
-            image_colors.append(image_analysis.get(col, row))
-    
-    # Build cost matrix: cost[i][j] = distance from venndicon i to image cell j
-    # This is a square matrix since we have exactly num_cells venndicons and num_cells positions
-    cost_matrix = np.zeros((num_cells, num_cells))
-    
-    for i, v_colors in enumerate(venndicon_colors):
-        for j, img_colors in enumerate(image_colors):
-            cost_matrix[i, j] = _quadrant_color_distance(v_colors, img_colors)
-    
-    # Solve assignment problem using Hungarian algorithm
-    # This finds the optimal permutation of venndicons to image cells
-    venndicon_indices, cell_indices = linear_sum_assignment(cost_matrix)
-    
-    # Create mapping: cell_position -> venndicon_index
-    cell_to_venndicon = {}
-    for v_idx, cell_idx in zip(venndicon_indices, cell_indices):
-        cell_to_venndicon[cell_idx] = v_idx
-    
-    # Build 2D grid of venndicons in the matched order
-    venndicons_2d = []
-    total_distance = 0
-    assignment = []
-    
-    for row in range(rows):
-        row_venndicons = []
-        for col in range(cols):
-            cell_idx = row * cols + col
-            venndicon_idx = cell_to_venndicon[cell_idx]
-            row_venndicons.append(venndicons[venndicon_idx])
-            assignment.append((venndicon_idx, cell_idx))
-            total_distance += cost_matrix[venndicon_idx, cell_idx]
-        venndicons_2d.append(row_venndicons)
-    
-    return MatchedGrid(
-        cols=cols,
-        rows=rows,
-        cell_size=cell_size,
-        venndicons=venndicons_2d,
-        assignment=assignment,
-        total_distance=total_distance,
-        image_analysis=image_analysis,
-        original_venndicons=venndicons,  # Store original order
-        start_seed=start_seed,
-    )
+        venndicon_quad_colors.append(analyze_quadrants(v))
+
+    # Match venndicons to each image independently
+    results = []
+    for analysis, (g_cols, g_rows) in zip(image_analyses, grid_specs):
+        num_cells = g_cols * g_rows
+
+        # Flatten image cell colours
+        image_cell_colors = []
+        for row in range(g_rows):
+            for col in range(g_cols):
+                image_cell_colors.append(analysis.get(col, row))
+
+        # Cost matrix: (max_cells × num_cells).  When the pool is larger than
+        # the grid, linear_sum_assignment selects the best subset.
+        cost_matrix = np.zeros((max_cells, num_cells))
+        for vi, vc in enumerate(venndicon_quad_colors):
+            for ci, ic in enumerate(image_cell_colors):
+                cost_matrix[vi, ci] = _quadrant_color_distance(vc, ic)
+
+        v_indices, c_indices = linear_sum_assignment(cost_matrix)
+
+        cell_to_venndicon = {}
+        for v_idx, c_idx in zip(v_indices, c_indices):
+            cell_to_venndicon[c_idx] = v_idx
+
+        venndicons_2d = []
+        total_distance = 0
+        assignment = []
+        for row in range(g_rows):
+            row_venndicons = []
+            for col in range(g_cols):
+                cell_idx = row * g_cols + col
+                venndicon_idx = cell_to_venndicon[cell_idx]
+                row_venndicons.append(venndicons[venndicon_idx])
+                assignment.append((venndicon_idx, cell_idx))
+                total_distance += cost_matrix[venndicon_idx, cell_idx]
+            venndicons_2d.append(row_venndicons)
+
+        # Store the assigned subset in seed order for original_grid()
+        used_indices = sorted(cell_to_venndicon.values())
+        original_subset = [venndicons[idx] for idx in used_indices]
+
+        results.append(MatchedGrid(
+            cols=g_cols,
+            rows=g_rows,
+            cell_size=cell_size,
+            venndicons=venndicons_2d,
+            assignment=assignment,
+            total_distance=total_distance,
+            image_analysis=analysis,
+            original_venndicons=original_subset,
+            start_seed=start_seed,
+        ))
+
+    if single_image:
+        return results[0]
+    return results
 
 
 def random_color() -> str:
