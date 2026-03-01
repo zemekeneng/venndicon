@@ -1,8 +1,728 @@
-<html>
-    <head>
-        <script src="https://cdnjs.cloudflare.com/ajax/libs/svg.js/2.3.6/svg.min.js"></script>
-    </head>
-    <body>
-        <script src="venndicon.js"></script>
-    </body>
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Venndicon</title>
+<style>
+  :root {
+    --bg: #111;
+    --surface: #1a1a1a;
+    --surface2: #222;
+    --border: #333;
+    --text: #e8e8e8;
+    --text-dim: #999;
+    --accent: #6ea8fe;
+    --accent-dim: #3a6daa;
+    --max-w: 900px;
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  html { scroll-behavior: smooth; }
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+    line-height: 1.7;
+    min-height: 100vh;
+  }
+  a { color: var(--accent); }
+
+  /* --- NAV --- */
+  nav {
+    position: sticky; top: 0; z-index: 100;
+    background: rgba(17,17,17,.85);
+    backdrop-filter: blur(10px);
+    border-bottom: 1px solid var(--border);
+    padding: 10px 24px;
+    display: flex; gap: 24px; align-items: center;
+    font-size: 14px;
+  }
+  nav .brand { font-weight: 700; font-size: 16px; color: var(--text); text-decoration: none; }
+  nav a { text-decoration: none; color: var(--text-dim); }
+  nav a:hover { color: var(--text); }
+
+  /* --- SECTIONS --- */
+  section {
+    max-width: var(--max-w);
+    margin: 0 auto;
+    padding: 60px 24px 40px;
+  }
+  section + section { border-top: 1px solid var(--border); }
+  h1 { font-size: 48px; font-weight: 800; letter-spacing: -1px; margin-bottom: 12px; }
+  h2 { font-size: 28px; font-weight: 700; margin-bottom: 16px; }
+  h3 { font-size: 20px; font-weight: 600; margin-bottom: 10px; color: var(--accent); }
+  p { margin-bottom: 16px; }
+  .subtitle { font-size: 20px; color: var(--text-dim); margin-bottom: 32px; }
+
+  /* --- HERO --- */
+  #hero { text-align: center; padding-top: 80px; }
+  #hero-icon { margin: 0 auto 32px; }
+
+  /* --- DEMO --- */
+  .demo-row {
+    display: flex; flex-wrap: wrap; gap: 16px;
+    justify-content: center; margin: 24px 0;
+  }
+  .demo-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    overflow: hidden;
+    line-height: 0;
+  }
+  button {
+    background: var(--accent-dim);
+    color: #fff; border: none;
+    padding: 10px 24px;
+    border-radius: 6px;
+    font-size: 14px; font-weight: 600;
+    cursor: pointer;
+    transition: background .15s;
+  }
+  button:hover { background: var(--accent); }
+
+  /* --- REGION DIAGRAM --- */
+  .region-legend {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+    gap: 8px; margin: 16px 0;
+    font-size: 14px;
+  }
+  .region-legend span {
+    display: flex; align-items: center; gap: 8px;
+  }
+  .swatch {
+    display: inline-block; width: 16px; height: 16px;
+    border-radius: 3px; flex-shrink: 0;
+  }
+
+  /* --- CODE --- */
+  pre {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 16px 20px;
+    overflow-x: auto;
+    font-size: 13px;
+    line-height: 1.6;
+    margin: 16px 0;
+    color: #c9d1d9;
+  }
+  code { font-family: "SF Mono", "Fira Code", "Consolas", monospace; }
+  .kw { color: #ff7b72; }
+  .fn { color: #d2a8ff; }
+  .str { color: #a5d6ff; }
+  .cmt { color: #8b949e; }
+  .num { color: #79c0ff; }
+
+  /* --- ALGORITHM STEPS --- */
+  .steps {
+    counter-reset: step;
+    list-style: none;
+    margin: 16px 0;
+  }
+  .steps li {
+    counter-increment: step;
+    padding: 12px 16px 12px 52px;
+    position: relative;
+    margin-bottom: 8px;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+  }
+  .steps li::before {
+    content: counter(step);
+    position: absolute; left: 16px; top: 12px;
+    width: 24px; height: 24px;
+    background: var(--accent-dim);
+    color: #fff;
+    border-radius: 50%;
+    text-align: center; line-height: 24px;
+    font-size: 13px; font-weight: 700;
+  }
+
+  /* --- COST MATRIX TABLE --- */
+  .matrix-example {
+    overflow-x: auto; margin: 16px 0;
+  }
+  .matrix-example table {
+    border-collapse: collapse;
+    font-size: 13px;
+    font-family: "SF Mono", monospace;
+  }
+  .matrix-example th, .matrix-example td {
+    padding: 6px 12px;
+    border: 1px solid var(--border);
+    text-align: right;
+  }
+  .matrix-example th {
+    background: var(--surface2);
+    color: var(--text-dim);
+    font-weight: 600;
+  }
+  .matrix-example .opt {
+    background: rgba(110, 168, 254, 0.15);
+    font-weight: 700;
+    color: var(--accent);
+  }
+
+  /* --- VIEWER --- */
+  .viewer-section {
+    max-width: 100%;
+    margin: 0 auto;
+    padding: 60px 24px 40px;
+    border-top: 1px solid var(--border);
+  }
+  .viewer-section .inner { max-width: var(--max-w); margin: 0 auto; }
+  .viewer-panels {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: center;
+    gap: 16px;
+    margin: 24px 0;
+  }
+  .viewer-panel {
+    position: relative;
+    flex: 0 1 auto;
+    background: var(--surface);
+    border-radius: 6px;
+    overflow: hidden;
+    border: 1px solid var(--border);
+  }
+  .viewer-panel-label {
+    padding: 6px 10px;
+    font-size: 12px;
+    color: var(--text-dim);
+    background: var(--surface2);
+    border-bottom: 1px solid var(--border);
+  }
+  .viewer-panel-body {
+    position: relative;
+    line-height: 0;
+  }
+  .viewer-panel-body > svg { display: block; }
+  .viewer-overlay {
+    position: absolute;
+    top: 0; left: 0;
+    pointer-events: none;
+  }
+  .viewer-overlay rect {
+    pointer-events: all;
+    cursor: crosshair;
+  }
+  .viewer-overlay rect.highlight {
+    fill: rgba(255, 255, 80, 0.45);
+    stroke: #ffee00;
+    stroke-width: 1.5;
+  }
+  .viewer-overlay rect.pinned {
+    fill: rgba(80, 180, 255, 0.45);
+    stroke: #40aaff;
+    stroke-width: 1.5;
+  }
+  .viewer-hint {
+    text-align: center;
+    font-size: 13px;
+    color: var(--text-dim);
+    margin-top: 8px;
+  }
+  .loading-msg {
+    text-align: center;
+    color: var(--text-dim);
+    padding: 40px;
+    font-size: 14px;
+  }
+</style>
+</head>
+<body>
+
+<nav>
+  <a class="brand" href="#">Venndicon</a>
+  <a href="#how">How It Works</a>
+  <a href="#matching">Image Matching</a>
+  <a href="#hungarian">Hungarian Algorithm</a>
+  <a href="#gallery">Gallery</a>
+</nav>
+
+<!-- ============ HERO ============ -->
+<section id="hero">
+  <div id="hero-icon"></div>
+  <h1>Venndicon</h1>
+  <p class="subtitle">A Venn diagram icon &mdash; three overlapping circles with random positions, sizes, and colors for each of the eight regions.</p>
+  <button onclick="regenerateHero()">Generate New</button>
+</section>
+
+<!-- ============ HOW IT WORKS ============ -->
+<section id="how">
+  <h2>How Venndicons Are Produced</h2>
+  <p>
+    Each venndicon is a small SVG built from <strong>three circles</strong> drawn on a square canvas.
+    The circles overlap to create a classic Venn diagram with <strong>eight distinct regions</strong>,
+    and every region gets its own randomly chosen color.
+  </p>
+
+  <h3>The Parameters</h3>
+  <p>
+    Each circle has a random <strong>center position</strong> (anywhere from 20% to 80% of the canvas
+    on each axis) and a random <strong>radius</strong> (40% to 100% of the canvas width). With three
+    circles that is 9 random geometric values. Then 8 random colors are chosen &mdash; one for each
+    region of the Venn diagram. In total, <strong>17 random values</strong> define a venndicon.
+  </p>
+
+  <h3>The Eight Regions</h3>
+  <div id="labeled-diagram" class="demo-row"></div>
+  <div class="region-legend" id="region-legend"></div>
+
+  <h3>Variety</h3>
+  <p>
+    When a seed integer is provided the random number generator is deterministic, so the same seed
+    always produces the same venndicon. Here are seeds 0 through 15:
+  </p>
+  <div id="seed-grid" class="demo-row"></div>
+  <button onclick="regenerateGrid()">Regenerate with Random Seeds</button>
+</section>
+
+<!-- ============ MATCHING ============ -->
+<section id="matching">
+  <h2>Matching Venndicons to Images</h2>
+  <p>
+    A grid of venndicons can be arranged so that, when viewed from a distance, the grid approximates
+    a target photograph. The process has four steps:
+  </p>
+
+  <ol class="steps">
+    <li>
+      <strong>Divide the target image into a grid.</strong>
+      The photo is split into, say, 80&times;80 square cells. The grid is centered on the image and
+      any leftover pixels at the edges are cropped.
+    </li>
+    <li>
+      <strong>Analyze each cell's color.</strong>
+      Every cell is subdivided into four quadrants (top-left, top-right, bottom-left, bottom-right)
+      and the average RGB color of each quadrant is recorded. This gives a 4-color fingerprint per cell.
+    </li>
+    <li>
+      <strong>Generate a pool of candidate venndicons.</strong>
+      We create at least as many venndicons as there are grid cells (often more, so the algorithm
+      can be selective). Each venndicon is rendered and its own four-quadrant color fingerprint is
+      computed the same way. When <em>image color sampling</em> is on, the eight colors of each
+      venndicon are drawn from the photograph's palette rather than being fully random, which gives
+      the pool a much better starting distribution.
+    </li>
+    <li>
+      <strong>Solve the assignment problem.</strong>
+      We need a one-to-one mapping from venndicons to grid cells that minimizes total color distance.
+      This is a classic <strong>assignment problem</strong> and is solved optimally by the
+      <a href="#hungarian">Hungarian algorithm</a>.
+    </li>
+  </ol>
+
+  <h3>Color Distance</h3>
+  <p>
+    The "distance" between a venndicon and an image cell is the sum of squared Euclidean RGB
+    distances across all four quadrants:
+  </p>
+  <pre><code>distance = <span class="fn">sum</span>(
+    (r<sub>v</sub> &minus; r<sub>i</sub>)<sup>2</sup> + (g<sub>v</sub> &minus; g<sub>i</sub>)<sup>2</sup> + (b<sub>v</sub> &minus; b<sub>i</sub>)<sup>2</sup>
+    <span class="kw">for each</span> quadrant <span class="kw">in</span> [TL, TR, BL, BR]
+)</code></pre>
+  <p>
+    Using four quadrants rather than a single average gives the matching spatial awareness &mdash; a
+    venndicon that is dark on top and bright on bottom will be placed where the photo has the same
+    gradient, not just a similar overall luminance.
+  </p>
+</section>
+
+<!-- ============ HUNGARIAN ============ -->
+<section id="hungarian">
+  <h2>The Hungarian Algorithm</h2>
+  <p>
+    The assignment problem is: given <em>n</em> workers and <em>m</em> jobs with a cost for every
+    worker&ndash;job pair, find a one-to-one assignment of workers to jobs that minimizes total cost.
+    In our case the "workers" are venndicons and the "jobs" are image cells.
+  </p>
+
+  <h3>History</h3>
+  <p>
+    The algorithm was published by <strong>Harold Kuhn</strong> in 1955 and named "the Hungarian
+    method" because it was largely based on earlier work by two Hungarian mathematicians,
+    <strong>D&eacute;nes K&ouml;nig</strong> and <strong>Jen&odblac; Egerv&aacute;ry</strong>.
+    James Munkres refined it in 1957, which is why it is also known as the
+    <strong>Kuhn&ndash;Munkres algorithm</strong> or the <strong>Munkres assignment algorithm</strong>.
+  </p>
+
+  <h3>Problem Setup</h3>
+  <p>
+    Build an <em>n &times; m</em> <strong>cost matrix</strong> <em>C</em> where entry
+    <em>C[i][j]</em> is the color distance between venndicon <em>i</em> and image cell <em>j</em>.
+    For an 80&times;80 grid that is 6,400 cells, so the matrix has 6,400 columns. If we generate
+    6,400 venndicons the matrix is square; if we generate more (say 7,000) then the algorithm
+    naturally picks the best 6,400 from the pool.
+  </p>
+
+  <div class="matrix-example">
+    <table>
+      <tr><th></th><th>Cell 0</th><th>Cell 1</th><th>Cell 2</th><th>Cell 3</th></tr>
+      <tr><th>V 0</th><td>4120</td><td class="opt">310</td><td>8900</td><td>5430</td></tr>
+      <tr><th>V 1</th><td class="opt">520</td><td>6780</td><td>3200</td><td>9100</td></tr>
+      <tr><th>V 2</th><td>7600</td><td>4300</td><td>2100</td><td class="opt">890</td></tr>
+      <tr><th>V 3</th><td>3100</td><td>5500</td><td class="opt">670</td><td>4200</td></tr>
+    </table>
+    <p style="font-size:13px;color:var(--text-dim);margin-top:8px;">
+      Highlighted entries show the optimal assignment that minimizes total cost.
+    </p>
+  </div>
+
+  <h3>How It Works</h3>
+  <p>
+    The algorithm proceeds iteratively, maintaining a system of <strong>dual variables</strong>
+    (potentials) for rows and columns. At each step it tries to extend a maximum matching among the
+    "tight" edges (those where the cost equals the sum of the row and column potentials). The core
+    loop is:
+  </p>
+  <ol class="steps">
+    <li>
+      <strong>Initialize potentials.</strong>
+      Set each row potential <em>u[i]</em> to the minimum cost in that row. Set each column potential
+      <em>v[j]</em> to zero (or to the column minimum of the reduced matrix).
+    </li>
+    <li>
+      <strong>Find tight edges and build a matching.</strong>
+      An edge <em>(i, j)</em> is "tight" when <em>C[i][j] &minus; u[i] &minus; v[j] = 0</em>.
+      Among tight edges, find a maximum matching using augmenting paths.
+    </li>
+    <li>
+      <strong>Check for optimality.</strong>
+      If every row is matched the current assignment is optimal &mdash; stop. Otherwise, some rows
+      remain unmatched and we need to create new tight edges.
+    </li>
+    <li>
+      <strong>Adjust potentials.</strong>
+      Find the minimum slack <em>&delta;</em> among edges between unmatched rows and unmatched
+      columns. Add <em>&delta;</em> to the potentials of matched columns in the alternating tree and
+      subtract <em>&delta;</em> from unmatched rows. This creates at least one new tight edge without
+      destroying existing ones.
+    </li>
+    <li>
+      <strong>Repeat from step 2</strong> until a perfect matching is found.
+    </li>
+  </ol>
+
+  <h3>Complexity</h3>
+  <p>
+    The algorithm runs in <strong>O(n<sup>3</sup>)</strong> time in the worst case, where
+    <em>n = max(workers, jobs)</em>. For our 80&times;80 grid (6,400 cells) this is on the order of
+    2.6&times;10<sup>11</sup> operations in the very worst case, though in practice
+    <code>scipy.optimize.linear_sum_assignment</code> uses an optimized C implementation (the
+    Jonker&ndash;Volgenant algorithm, also known as LAPJV) that finishes in seconds.
+  </p>
+
+  <h3>Why Not Greedy?</h3>
+  <p>
+    A greedy approach &mdash; assign the lowest-cost pair first, then the next, and so on &mdash;
+    is fast but produces suboptimal results. Early assignments can "steal" good venndicons from cells
+    that have no other good match. The Hungarian algorithm guarantees the <strong>global
+    optimum</strong>: no rearrangement of the same venndicons can reduce total color distance.
+  </p>
+
+  <h3>Multiple Images</h3>
+  <p>
+    When matching the same pool of venndicons against multiple photographs (as in the gallery below),
+    a <em>shared pool</em> is generated once, and the Hungarian algorithm runs independently for each
+    image. This means every image gets its own optimal arrangement of the same set of venndicons. The
+    viewer below lets you hover over a cell in one image and see where that same venndicon ended up
+    in the other &mdash; they travel to very different positions because each image has its own optimal layout.
+  </p>
+</section>
+
+<!-- ============ GALLERY ============ -->
+<div class="viewer-section" id="gallery">
+  <div class="inner">
+    <h2>Gallery</h2>
+    <p>
+      These portraits are each composed entirely of venndicons &mdash; 6,400 for the square grids
+      and 6,348 for the taller one. Hover over any cell to see it highlighted; click to pin. In the
+      paired view (Dad &amp; Mom), the same venndicon is highlighted in both images simultaneously.
+    </p>
+  </div>
+
+  <h3 style="text-align:center;margin:32px 0 8px;">Ben (80&times;80)</h3>
+  <div id="viewer-ben" class="viewer-panels">
+    <div class="loading-msg">Loading matched_ben.svg&hellip;</div>
+  </div>
+  <p class="viewer-hint">Hover to highlight &middot; click to pin</p>
+
+  <h3 style="text-align:center;margin:32px 0 8px;">Dad &amp; Mom (shared pool &mdash; 80&times;80 / 69&times;92)</h3>
+  <div id="viewer-dadmom" class="viewer-panels">
+    <div class="loading-msg">Loading manifest.json&hellip;</div>
+  </div>
+  <p class="viewer-hint">Hover a cell in either image to see the same venndicon highlighted in both</p>
+</div>
+
+<!-- ============ SCRIPTS ============ -->
+<script>
+/* ===== Seeded RNG (mulberry32) ===== */
+function mulberry32(a) {
+  return function() {
+    a |= 0; a = a + 0x6D2B79F5 | 0;
+    var t = Math.imul(a ^ a >>> 15, 1 | a);
+    t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t;
+    return ((t ^ t >>> 14) >>> 0) / 4294967296;
+  };
+}
+
+/* ===== Venndicon SVG generator ===== */
+function generateVenndicon(size, seed) {
+  var rng = (seed != null) ? mulberry32(seed) : Math.random;
+  var randInt = function(lo, hi) { return lo + Math.floor(rng() * (hi - lo + 1)); };
+  var randColor = function() {
+    var r = randInt(1, 255), g = randInt(1, 255), b = randInt(1, 255);
+    return "#" + ((1<<24)+(r<<16)+(g<<8)+b).toString(16).slice(1);
+  };
+
+  var cx1 = randInt(2,8)*size/10, cx2 = randInt(2,8)*size/10, cx3 = randInt(2,8)*size/10;
+  var cy1 = randInt(2,8)*size/10, cy2 = randInt(2,8)*size/10, cy3 = randInt(2,8)*size/10;
+  var cr1 = randInt(4,10)*size/10, cr2 = randInt(4,10)*size/10, cr3 = randInt(4,10)*size/10;
+  var c = []; for (var i=0;i<8;i++) c.push(randColor());
+
+  var uid = Math.random().toString(36).slice(2, 10);
+
+  return '<svg xmlns="http://www.w3.org/2000/svg" width="'+size+'" height="'+size+'" viewBox="0 0 '+size+' '+size+'">'
+    + '<defs>'
+    + '<clipPath id="c2_'+uid+'"><circle cx="'+cx2+'" cy="'+cy2+'" r="'+cr2/2+'"/></clipPath>'
+    + '<clipPath id="c3_'+uid+'"><circle cx="'+cx3+'" cy="'+cy3+'" r="'+cr3/2+'"/></clipPath>'
+    + '<clipPath id="c3a_'+uid+'"><circle cx="'+cx3+'" cy="'+cy3+'" r="'+cr3/2+'"/></clipPath>'
+    + '<clipPath id="c1_'+uid+'"><circle cx="'+cx1+'" cy="'+cy1+'" r="'+cr1/2+'"/></clipPath>'
+    + '<clipPath id="ct_'+uid+'" clip-path="url(#c1_'+uid+')"><circle cx="'+cx3+'" cy="'+cy3+'" r="'+cr3/2+'"/></clipPath>'
+    + '</defs>'
+    + '<rect width="'+size+'" height="'+size+'" fill="'+c[0]+'"/>'
+    + '<circle cx="'+cx1+'" cy="'+cy1+'" r="'+cr1/2+'" fill="'+c[1]+'"/>'
+    + '<circle cx="'+cx2+'" cy="'+cy2+'" r="'+cr2/2+'" fill="'+c[2]+'"/>'
+    + '<circle cx="'+cx3+'" cy="'+cy3+'" r="'+cr3/2+'" fill="'+c[3]+'"/>'
+    + '<circle cx="'+cx1+'" cy="'+cy1+'" r="'+cr1/2+'" fill="'+c[4]+'" clip-path="url(#c2_'+uid+')"/>'
+    + '<circle cx="'+cx1+'" cy="'+cy1+'" r="'+cr1/2+'" fill="'+c[5]+'" clip-path="url(#c3_'+uid+')"/>'
+    + '<circle cx="'+cx2+'" cy="'+cy2+'" r="'+cr2/2+'" fill="'+c[6]+'" clip-path="url(#c3a_'+uid+')"/>'
+    + '<circle cx="'+cx2+'" cy="'+cy2+'" r="'+cr2/2+'" fill="'+c[7]+'" clip-path="url(#ct_'+uid+')"/>'
+    + '</svg>';
+}
+
+/* ===== Hero ===== */
+function regenerateHero() {
+  var el = document.getElementById("hero-icon");
+  el.innerHTML = generateVenndicon(200, Math.floor(Math.random() * 100000));
+}
+regenerateHero();
+
+/* ===== Labeled diagram ===== */
+(function() {
+  var regionNames = [
+    "Background", "Circle A only", "Circle B only", "Circle C only",
+    "A \u2229 B", "A \u2229 C", "B \u2229 C", "A \u2229 B \u2229 C"
+  ];
+  var regionColors = [
+    "#3a3a5c", "#c0392b", "#2980b9", "#27ae60",
+    "#8e44ad", "#d4a017", "#16a085", "#e8e8e8"
+  ];
+
+  var size = 200;
+  var cx1=80,cy1=75,cr1=130, cx2=130,cy2=75,cr2=130, cx3=105,cy3=120,cr3=130;
+  var uid = "lbl";
+
+  var svg = '<svg xmlns="http://www.w3.org/2000/svg" width="'+size+'" height="'+size+'" viewBox="0 0 '+size+' '+size+'">'
+    + '<defs>'
+    + '<clipPath id="c2_'+uid+'"><circle cx="'+cx2+'" cy="'+cy2+'" r="'+cr2/2+'"/></clipPath>'
+    + '<clipPath id="c3_'+uid+'"><circle cx="'+cx3+'" cy="'+cy3+'" r="'+cr3/2+'"/></clipPath>'
+    + '<clipPath id="c3a_'+uid+'"><circle cx="'+cx3+'" cy="'+cy3+'" r="'+cr3/2+'"/></clipPath>'
+    + '<clipPath id="c1_'+uid+'"><circle cx="'+cx1+'" cy="'+cy1+'" r="'+cr1/2+'"/></clipPath>'
+    + '<clipPath id="ct_'+uid+'" clip-path="url(#c1_'+uid+')"><circle cx="'+cx3+'" cy="'+cy3+'" r="'+cr3/2+'"/></clipPath>'
+    + '</defs>'
+    + '<rect width="'+size+'" height="'+size+'" fill="'+regionColors[0]+'"/>'
+    + '<circle cx="'+cx1+'" cy="'+cy1+'" r="'+cr1/2+'" fill="'+regionColors[1]+'"/>'
+    + '<circle cx="'+cx2+'" cy="'+cy2+'" r="'+cr2/2+'" fill="'+regionColors[2]+'"/>'
+    + '<circle cx="'+cx3+'" cy="'+cy3+'" r="'+cr3/2+'" fill="'+regionColors[3]+'"/>'
+    + '<circle cx="'+cx1+'" cy="'+cy1+'" r="'+cr1/2+'" fill="'+regionColors[4]+'" clip-path="url(#c2_'+uid+')"/>'
+    + '<circle cx="'+cx1+'" cy="'+cy1+'" r="'+cr1/2+'" fill="'+regionColors[5]+'" clip-path="url(#c3_'+uid+')"/>'
+    + '<circle cx="'+cx2+'" cy="'+cy2+'" r="'+cr2/2+'" fill="'+regionColors[6]+'" clip-path="url(#c3a_'+uid+')"/>'
+    + '<circle cx="'+cx2+'" cy="'+cy2+'" r="'+cr2/2+'" fill="'+regionColors[7]+'" clip-path="url(#ct_'+uid+')"/>'
+    + '</svg>';
+
+  document.getElementById("labeled-diagram").innerHTML =
+    '<div class="demo-card">' + svg + '</div>';
+
+  var legendEl = document.getElementById("region-legend");
+  for (var i = 0; i < 8; i++) {
+    legendEl.innerHTML += '<span><i class="swatch" style="background:'+regionColors[i]+'"></i>'+regionNames[i]+'</span>';
+  }
+})();
+
+/* ===== Seed grid ===== */
+var gridSeeds = [];
+for (var i = 0; i < 16; i++) gridSeeds.push(i);
+
+function renderGrid(seeds) {
+  var html = "";
+  seeds.forEach(function(s) {
+    html += '<div class="demo-card" title="seed '+s+'">' + generateVenndicon(80, s) + '</div>';
+  });
+  document.getElementById("seed-grid").innerHTML = html;
+}
+renderGrid(gridSeeds);
+
+function regenerateGrid() {
+  var seeds = [];
+  var base = Math.floor(Math.random() * 100000);
+  for (var i = 0; i < 16; i++) seeds.push(base + i);
+  gridSeeds = seeds;
+  renderGrid(seeds);
+}
+
+/* ===== Viewer engine ===== */
+var SVG_NS = "http://www.w3.org/2000/svg";
+
+function loadViewer(containerID, manifestURL) {
+  var container = document.getElementById(containerID);
+
+  fetch(manifestURL).then(function(r) {
+    if (!r.ok) throw new Error(r.statusText);
+    return r.json();
+  }).then(function(manifest) {
+    container.innerHTML = "";
+    var images = manifest.images;
+    var coordinates = manifest.coordinates;
+
+    var reverseMaps = images.map(function() { return new Map(); });
+    for (var idx = 0; idx < coordinates.length; idx++) {
+      var entry = coordinates[idx];
+      for (var imgIdx = 0; imgIdx < entry.length; imgIdx++) {
+        var pos = entry[imgIdx];
+        if (pos !== null) {
+          reverseMaps[imgIdx].set(pos[1] * images[imgIdx].cols + pos[0], idx);
+        }
+      }
+    }
+
+    var overlayRects = [];
+
+    var loadPromises = images.map(function(img, imgIdx) {
+      return fetch(img.file).then(function(r) {
+        if (!r.ok) throw new Error(r.statusText);
+        return r.text();
+      }).then(function(svgMarkup) {
+        return { imgIdx: imgIdx, img: img, svgMarkup: svgMarkup };
+      });
+    });
+
+    Promise.all(loadPromises).then(function(results) {
+      results.sort(function(a,b) { return a.imgIdx - b.imgIdx; });
+
+      results.forEach(function(res) {
+        var img = res.img, imgIdx = res.imgIdx, svgMarkup = res.svgMarkup;
+
+        var panel = document.createElement("div");
+        panel.className = "viewer-panel";
+
+        var label = document.createElement("div");
+        label.className = "viewer-panel-label";
+        label.textContent = img.file + "  (" + img.cols + "\u00d7" + img.rows + ")";
+        panel.appendChild(label);
+
+        var body = document.createElement("div");
+        body.className = "viewer-panel-body";
+
+        var tmp = document.createElement("div");
+        tmp.innerHTML = svgMarkup;
+        var svgEl = tmp.querySelector("svg");
+        var svgW = parseInt(svgEl.getAttribute("width"), 10);
+        var svgH = parseInt(svgEl.getAttribute("height"), 10);
+        body.appendChild(svgEl);
+
+        var overlay = document.createElementNS(SVG_NS, "svg");
+        overlay.setAttribute("viewBox", "0 0 " + svgW + " " + svgH);
+        overlay.setAttribute("width", svgW);
+        overlay.setAttribute("height", svgH);
+        overlay.classList.add("viewer-overlay");
+
+        var rectMap = new Map();
+        var rMap = reverseMaps[imgIdx];
+        var cellSize = img.cell_size;
+        var gap = img.gap;
+
+        for (var row = 0; row < img.rows; row++) {
+          for (var col = 0; col < img.cols; col++) {
+            var cellKey = row * img.cols + col;
+            var coordIdx = rMap.get(cellKey);
+            if (coordIdx === undefined) continue;
+
+            var x = gap + col * (cellSize + gap);
+            var y = gap + row * (cellSize + gap);
+
+            var rect = document.createElementNS(SVG_NS, "rect");
+            rect.setAttribute("x", x);
+            rect.setAttribute("y", y);
+            rect.setAttribute("width", cellSize);
+            rect.setAttribute("height", cellSize);
+            rect.setAttribute("fill", "transparent");
+            rect.setAttribute("stroke", "none");
+            rect.dataset.idx = coordIdx;
+
+            overlay.appendChild(rect);
+            rectMap.set(coordIdx, rect);
+          }
+        }
+
+        body.appendChild(overlay);
+        panel.appendChild(body);
+        container.appendChild(panel);
+        overlayRects.push(rectMap);
+      });
+
+      function highlightAll(coordIdx) {
+        var entry = coordinates[coordIdx];
+        if (!entry) return;
+        for (var i = 0; i < entry.length; i++) {
+          if (entry[i] === null) continue;
+          var rect = overlayRects[i].get(coordIdx);
+          if (rect) rect.classList.add("highlight");
+        }
+      }
+      function clearHighlight() {
+        overlayRects.forEach(function(rMap) {
+          rMap.forEach(function(rect) { rect.classList.remove("highlight"); });
+        });
+      }
+      function togglePin(coordIdx) {
+        var entry = coordinates[coordIdx];
+        if (!entry) return;
+        var first = overlayRects[0].get(coordIdx);
+        var wasPinned = first && first.classList.contains("pinned");
+        for (var i = 0; i < entry.length; i++) {
+          if (entry[i] === null) continue;
+          var rect = overlayRects[i].get(coordIdx);
+          if (rect) rect.classList.toggle("pinned", !wasPinned);
+        }
+      }
+
+      container.addEventListener("mouseenter", function(e) {
+        if (e.target.dataset.idx === undefined) return;
+        highlightAll(parseInt(e.target.dataset.idx, 10));
+      }, true);
+      container.addEventListener("mouseleave", function(e) {
+        if (e.target.dataset.idx === undefined) return;
+        clearHighlight();
+      }, true);
+      container.addEventListener("click", function(e) {
+        if (e.target.dataset.idx === undefined) return;
+        togglePin(parseInt(e.target.dataset.idx, 10));
+      }, true);
+    });
+  }).catch(function(err) {
+    container.innerHTML = '<div class="loading-msg">Failed to load ' + manifestURL + ' &mdash; ' + err.message + '</div>';
+  });
+}
+
+/* Launch both viewers */
+loadViewer("viewer-ben", "manifest_ben.json");
+loadViewer("viewer-dadmom", "manifest.json");
+</script>
+</body>
 </html>

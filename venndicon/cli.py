@@ -133,8 +133,18 @@ def main():
     # Build coordinate mapping: for each venndicon that appears in
     # the first image (iterated in grid order), list its (col, row)
     # position in every image.  None when the venndicon wasn't used.
+    image_meta = []
     position_maps = []
-    for result in results:
+    for image_path, result in zip(args.images, results):
+        base = os.path.splitext(os.path.basename(image_path))[0]
+        out_name = f"{args.prefix}{base}{ext}"
+        image_meta.append({
+            "file": out_name,
+            "cols": result.cols,
+            "rows": result.rows,
+            "cell_size": args.cell_size,
+            "gap": args.gap,
+        })
         pm = {}
         for v_idx, c_idx in result.assignment:
             col = c_idx % result.cols
@@ -149,7 +159,11 @@ def main():
             entry.append(pm.get(v_idx))
         coordinates.append(entry)
 
-    print(json.dumps(coordinates))
+    manifest = {
+        "images": image_meta,
+        "coordinates": coordinates,
+    }
+    print(json.dumps(manifest))
     print("Done.", file=sys.stderr)
 
 

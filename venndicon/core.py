@@ -1,6 +1,7 @@
 """Core Venndicon SVG generation logic."""
 
 import io
+import math
 import random
 import uuid
 from typing import Optional, Union, List
@@ -514,15 +515,16 @@ def match_venndicons_to_image(
     - A single shared pool of Venndicons is created (sized for the largest grid).
     - Each image gets its own optimal arrangement from that pool.
     - If images have different dimensions, grid sizes are computed per-image
-      to preserve aspect ratio without distortion (using the first image's
-      cell density as reference). Excess Venndicons are discarded to maintain
-      perfect rectangles.
+      to preserve aspect ratio without distortion, using at most cols×rows
+      total cells. Excess Venndicons are discarded to maintain perfect
+      rectangles.
     
     Args:
         image_sources: Image(s) to match - a single source (file path or PIL
                        Image) or a list of sources.
         cols: Number of columns for the first image's grid (other images
-              derive their grid from this density and their own aspect ratio).
+              derive their grid from the first image's cell count and their
+              own aspect ratio).
         rows: Number of rows for the first image's grid.
         start_seed: Starting seed for generating Venndicons.
         cell_size: Size of each Venndicon in the output grid.
@@ -564,10 +566,7 @@ def match_venndicons_to_image(
     # Load all images to get their dimensions
     pil_images = [_load_image(src) for src in image_sources]
 
-    # First image defines the reference pixel-cell size; subsequent images
-    # derive their grid dimensions from this to keep cell density consistent.
-    first_w, first_h = pil_images[0].size
-    pixel_cell_size = min(first_w / cols, first_h / rows)
+    primary_cells = cols * rows
 
     grid_specs = []  # (cols, rows) per image
     for i, img in enumerate(pil_images):
@@ -575,8 +574,17 @@ def match_venndicons_to_image(
             grid_specs.append((cols, rows))
         else:
             w, h = img.size
-            img_cols = max(1, int(w / pixel_cell_size))
-            img_rows = max(1, int(h / pixel_cell_size))
+            aspect = w / h
+            # Solve for img_rows such that
+            # (aspect * img_rows) * img_rows <= primary_cells
+            img_rows = max(1, int(math.sqrt(primary_cells / aspect)))
+            img_cols = max(1, int(aspect * img_rows))
+            # Trim if we slightly overshot due to rounding
+            while img_cols * img_rows > primary_cells:
+                if img_cols >= img_rows:
+                    img_cols -= 1
+                else:
+                    img_rows -= 1
             grid_specs.append((img_cols, img_rows))
 
     max_cells = max(c * r for c, r in grid_specs)

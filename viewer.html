@@ -1,0 +1,236 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Venndicon Viewer</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    background: #111;
+    color: #eee;
+    font-family: system-ui, -apple-system, sans-serif;
+    min-height: 100vh;
+  }
+  #header {
+    padding: 12px 20px;
+    background: #1a1a1a;
+    border-bottom: 1px solid #333;
+    display: flex;
+    align-items: center;
+    gap: 16px;
+  }
+  #header h1 { font-size: 18px; font-weight: 600; }
+  #status { font-size: 13px; color: #888; }
+  #panels {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: center;
+    gap: 16px;
+    padding: 16px;
+  }
+  .panel {
+    position: relative;
+    flex: 0 1 auto;
+    background: #1a1a1a;
+    border-radius: 6px;
+    overflow: hidden;
+    border: 1px solid #333;
+  }
+  .panel-label {
+    padding: 6px 10px;
+    font-size: 12px;
+    color: #aaa;
+    background: #222;
+    border-bottom: 1px solid #333;
+  }
+  .panel-body {
+    position: relative;
+    line-height: 0;
+  }
+  .panel-body > svg { display: block; }
+  .overlay {
+    position: absolute;
+    top: 0;
+    left: 0;
+    pointer-events: none;
+  }
+  .overlay rect {
+    pointer-events: all;
+    cursor: crosshair;
+  }
+  .overlay rect.highlight {
+    fill: rgba(255, 255, 80, 0.45);
+    stroke: #ffee00;
+    stroke-width: 1.5;
+  }
+  .overlay rect.pinned {
+    fill: rgba(80, 180, 255, 0.45);
+    stroke: #40aaff;
+    stroke-width: 1.5;
+  }
+</style>
+</head>
+<body>
+<div id="header">
+  <h1>Venndicon Viewer</h1>
+  <span id="status">Loading manifest.json&hellip;</span>
+</div>
+<div id="panels"></div>
+<script>
+(async function () {
+  const statusEl = document.getElementById("status");
+  const panelsEl = document.getElementById("panels");
+  const SVG_NS = "http://www.w3.org/2000/svg";
+
+  /* ---------- load manifest ---------- */
+  let manifest;
+  try {
+    const resp = await fetch("manifest.json");
+    if (!resp.ok) throw new Error(resp.statusText);
+    manifest = await resp.json();
+  } catch (e) {
+    statusEl.textContent = "Failed to load manifest.json – " + e.message;
+    return;
+  }
+
+  const { images, coordinates } = manifest;
+  statusEl.textContent = `${images.length} image(s), ${coordinates.length} venndicons`;
+
+  /* ---------- reverse lookup: (imgIdx, col, row) -> coord index ---------- */
+  const reverseMaps = images.map(() => new Map());
+  for (let idx = 0; idx < coordinates.length; idx++) {
+    const entry = coordinates[idx];
+    for (let imgIdx = 0; imgIdx < entry.length; imgIdx++) {
+      const pos = entry[imgIdx];
+      if (pos !== null) {
+        reverseMaps[imgIdx].set(pos[1] * images[imgIdx].cols + pos[0], idx);
+      }
+    }
+  }
+
+  /* ---------- create panels ---------- */
+  const overlayRects = [];   // overlayRects[imgIdx] = Map<coordIdx, rectEl>
+
+  for (let imgIdx = 0; imgIdx < images.length; imgIdx++) {
+    const img = images[imgIdx];
+    const panel = document.createElement("div");
+    panel.className = "panel";
+
+    const label = document.createElement("div");
+    label.className = "panel-label";
+    label.textContent = `${img.file}  (${img.cols}×${img.rows})`;
+    panel.appendChild(label);
+
+    const body = document.createElement("div");
+    body.className = "panel-body";
+
+    /* fetch and inline the SVG */
+    let svgMarkup;
+    try {
+      const resp = await fetch(img.file);
+      if (!resp.ok) throw new Error(resp.statusText);
+      svgMarkup = await resp.text();
+    } catch (e) {
+      body.textContent = "Failed to load " + img.file;
+      panel.appendChild(body);
+      panelsEl.appendChild(panel);
+      overlayRects.push(new Map());
+      continue;
+    }
+
+    const tmp = document.createElement("div");
+    tmp.innerHTML = svgMarkup;
+    const svgEl = tmp.querySelector("svg");
+    const svgW = parseInt(svgEl.getAttribute("width"), 10);
+    const svgH = parseInt(svgEl.getAttribute("height"), 10);
+    body.appendChild(svgEl);
+
+    /* overlay SVG with hit-target rects */
+    const overlay = document.createElementNS(SVG_NS, "svg");
+    overlay.setAttribute("viewBox", `0 0 ${svgW} ${svgH}`);
+    overlay.setAttribute("width", svgW);
+    overlay.setAttribute("height", svgH);
+    overlay.classList.add("overlay");
+
+    const rectMap = new Map();  // coordIdx -> rect element
+    const rMap = reverseMaps[imgIdx];
+
+    for (let row = 0; row < img.rows; row++) {
+      for (let col = 0; col < img.cols; col++) {
+        const cellKey = row * img.cols + col;
+        const coordIdx = rMap.get(cellKey);
+        if (coordIdx === undefined) continue;
+
+        const x = img.gap + col * (img.cell_size + img.gap);
+        const y = img.gap + row * (img.cell_size + img.gap);
+
+        const rect = document.createElementNS(SVG_NS, "rect");
+        rect.setAttribute("x", x);
+        rect.setAttribute("y", y);
+        rect.setAttribute("width", img.cell_size);
+        rect.setAttribute("height", img.cell_size);
+        rect.setAttribute("fill", "transparent");
+        rect.setAttribute("stroke", "none");
+        rect.dataset.idx = coordIdx;
+
+        overlay.appendChild(rect);
+        rectMap.set(coordIdx, rect);
+      }
+    }
+
+    body.appendChild(overlay);
+    panel.appendChild(body);
+    panelsEl.appendChild(panel);
+    overlayRects.push(rectMap);
+  }
+
+  /* ---------- interaction ---------- */
+  function highlightAll(coordIdx) {
+    const entry = coordinates[coordIdx];
+    if (!entry) return;
+    for (let i = 0; i < entry.length; i++) {
+      if (entry[i] === null) continue;
+      const rect = overlayRects[i].get(coordIdx);
+      if (rect) rect.classList.add("highlight");
+    }
+  }
+
+  function clearHighlight() {
+    for (const rMap of overlayRects) {
+      for (const rect of rMap.values()) {
+        rect.classList.remove("highlight");
+      }
+    }
+  }
+
+  function togglePin(coordIdx) {
+    const entry = coordinates[coordIdx];
+    if (!entry) return;
+    const first = overlayRects[0].get(coordIdx);
+    const wasPinned = first && first.classList.contains("pinned");
+    for (let i = 0; i < entry.length; i++) {
+      if (entry[i] === null) continue;
+      const rect = overlayRects[i].get(coordIdx);
+      if (rect) rect.classList.toggle("pinned", !wasPinned);
+    }
+  }
+
+  panelsEl.addEventListener("mouseenter", (e) => {
+    if (e.target.dataset.idx === undefined) return;
+    highlightAll(parseInt(e.target.dataset.idx, 10));
+  }, true);
+
+  panelsEl.addEventListener("mouseleave", (e) => {
+    if (e.target.dataset.idx === undefined) return;
+    clearHighlight();
+  }, true);
+
+  panelsEl.addEventListener("click", (e) => {
+    if (e.target.dataset.idx === undefined) return;
+    togglePin(parseInt(e.target.dataset.idx, 10));
+  }, true);
+})();
+</script>
+</body>
+</html>
