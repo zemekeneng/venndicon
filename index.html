@@ -200,25 +200,17 @@
     position: relative;
     line-height: 0;
   }
-  .viewer-panel-body > svg { display: block; }
-  .viewer-overlay {
+  .viewer-panel-body img {
+    display: block;
+    width: 100%;
+    height: auto;
+  }
+  .viewer-panel-body canvas {
     position: absolute;
     top: 0; left: 0;
-    pointer-events: none;
-  }
-  .viewer-overlay rect {
-    pointer-events: all;
+    width: 100%;
+    height: 100%;
     cursor: crosshair;
-  }
-  .viewer-overlay rect.highlight {
-    fill: rgba(255, 255, 80, 0.45);
-    stroke: #ffee00;
-    stroke-width: 1.5;
-  }
-  .viewer-overlay rect.pinned {
-    fill: rgba(80, 180, 255, 0.45);
-    stroke: #40aaff;
-    stroke-width: 1.5;
   }
   .viewer-hint {
     text-align: center;
@@ -576,8 +568,7 @@ function regenerateGrid() {
   renderGrid(seeds);
 }
 
-/* ===== Viewer engine ===== */
-var SVG_NS = "http://www.w3.org/2000/svg";
+/* ===== Viewer engine (JPEG + canvas overlay + JS hit-testing) ===== */
 
 function loadViewer(containerID, manifestURL) {
   var container = document.getElementById(containerID);
@@ -601,120 +592,121 @@ function loadViewer(containerID, manifestURL) {
       }
     }
 
-    var overlayRects = [];
+    var panels = [];
+    var pinnedSet = new Set();
 
-    var loadPromises = images.map(function(img, imgIdx) {
-      return fetch(img.file).then(function(r) {
-        if (!r.ok) throw new Error(r.statusText);
-        return r.text();
-      }).then(function(svgMarkup) {
-        return { imgIdx: imgIdx, img: img, svgMarkup: svgMarkup };
+    images.forEach(function(img, imgIdx) {
+      var panel = document.createElement("div");
+      panel.className = "viewer-panel";
+
+      var label = document.createElement("div");
+      label.className = "viewer-panel-label";
+      label.textContent = img.file + "  (" + img.cols + "\u00d7" + img.rows + ")";
+      panel.appendChild(label);
+
+      var body = document.createElement("div");
+      body.className = "viewer-panel-body";
+
+      var cellSize = img.cell_size;
+      var gap = img.gap;
+      var gridW = img.cols * cellSize + (img.cols + 1) * gap;
+      var gridH = img.rows * cellSize + (img.rows + 1) * gap;
+
+      var imgEl = new Image();
+      imgEl.src = img.file;
+      imgEl.width = gridW;
+      imgEl.height = gridH;
+      body.appendChild(imgEl);
+
+      var canvas = document.createElement("canvas");
+      canvas.width = gridW;
+      canvas.height = gridH;
+      body.appendChild(canvas);
+
+      var ctx = canvas.getContext("2d");
+
+      panel.appendChild(body);
+      container.appendChild(panel);
+
+      panels.push({
+        img: img, imgIdx: imgIdx, canvas: canvas, ctx: ctx,
+        reverseMap: reverseMaps[imgIdx],
+        gridW: gridW, gridH: gridH
       });
     });
 
-    Promise.all(loadPromises).then(function(results) {
-      results.sort(function(a,b) { return a.imgIdx - b.imgIdx; });
+    function cellFromMouse(p, e) {
+      var rect = p.canvas.getBoundingClientRect();
+      var scaleX = p.gridW / rect.width;
+      var scaleY = p.gridH / rect.height;
+      var mx = (e.clientX - rect.left) * scaleX;
+      var my = (e.clientY - rect.top) * scaleY;
+      var cellSize = p.img.cell_size;
+      var gap = p.img.gap;
+      var stride = cellSize + gap;
+      var col = Math.floor((mx - gap) / stride);
+      var row = Math.floor((my - gap) / stride);
+      if (col < 0 || col >= p.img.cols || row < 0 || row >= p.img.rows) return -1;
+      var lx = mx - (gap + col * stride);
+      var ly = my - (gap + row * stride);
+      if (lx < 0 || lx >= cellSize || ly < 0 || ly >= cellSize) return -1;
+      var cellKey = row * p.img.cols + col;
+      var coordIdx = p.reverseMap.get(cellKey);
+      return coordIdx !== undefined ? coordIdx : -1;
+    }
 
-      results.forEach(function(res) {
-        var img = res.img, imgIdx = res.imgIdx, svgMarkup = res.svgMarkup;
+    function drawHighlight(p, coordIdx, color, lineWidth) {
+      var entry = coordinates[coordIdx];
+      if (!entry) return;
+      var pos = entry[p.imgIdx];
+      if (pos === null) return;
+      var cellSize = p.img.cell_size;
+      var gap = p.img.gap;
+      var stride = cellSize + gap;
+      var x = gap + pos[0] * stride;
+      var y = gap + pos[1] * stride;
+      p.ctx.fillStyle = color;
+      p.ctx.fillRect(x, y, cellSize, cellSize);
+      p.ctx.strokeStyle = color.replace(/[\d.]+\)$/, "1)");
+      p.ctx.lineWidth = lineWidth;
+      p.ctx.strokeRect(x + 0.5, y + 0.5, cellSize - 1, cellSize - 1);
+    }
 
-        var panel = document.createElement("div");
-        panel.className = "viewer-panel";
-
-        var label = document.createElement("div");
-        label.className = "viewer-panel-label";
-        label.textContent = img.file + "  (" + img.cols + "\u00d7" + img.rows + ")";
-        panel.appendChild(label);
-
-        var body = document.createElement("div");
-        body.className = "viewer-panel-body";
-
-        var tmp = document.createElement("div");
-        tmp.innerHTML = svgMarkup;
-        var svgEl = tmp.querySelector("svg");
-        var svgW = parseInt(svgEl.getAttribute("width"), 10);
-        var svgH = parseInt(svgEl.getAttribute("height"), 10);
-        body.appendChild(svgEl);
-
-        var overlay = document.createElementNS(SVG_NS, "svg");
-        overlay.setAttribute("viewBox", "0 0 " + svgW + " " + svgH);
-        overlay.setAttribute("width", svgW);
-        overlay.setAttribute("height", svgH);
-        overlay.classList.add("viewer-overlay");
-
-        var rectMap = new Map();
-        var rMap = reverseMaps[imgIdx];
-        var cellSize = img.cell_size;
-        var gap = img.gap;
-
-        for (var row = 0; row < img.rows; row++) {
-          for (var col = 0; col < img.cols; col++) {
-            var cellKey = row * img.cols + col;
-            var coordIdx = rMap.get(cellKey);
-            if (coordIdx === undefined) continue;
-
-            var x = gap + col * (cellSize + gap);
-            var y = gap + row * (cellSize + gap);
-
-            var rect = document.createElementNS(SVG_NS, "rect");
-            rect.setAttribute("x", x);
-            rect.setAttribute("y", y);
-            rect.setAttribute("width", cellSize);
-            rect.setAttribute("height", cellSize);
-            rect.setAttribute("fill", "transparent");
-            rect.setAttribute("stroke", "none");
-            rect.dataset.idx = coordIdx;
-
-            overlay.appendChild(rect);
-            rectMap.set(coordIdx, rect);
-          }
-        }
-
-        body.appendChild(overlay);
-        panel.appendChild(body);
-        container.appendChild(panel);
-        overlayRects.push(rectMap);
-      });
-
-      function highlightAll(coordIdx) {
-        var entry = coordinates[coordIdx];
-        if (!entry) return;
-        for (var i = 0; i < entry.length; i++) {
-          if (entry[i] === null) continue;
-          var rect = overlayRects[i].get(coordIdx);
-          if (rect) rect.classList.add("highlight");
-        }
-      }
-      function clearHighlight() {
-        overlayRects.forEach(function(rMap) {
-          rMap.forEach(function(rect) { rect.classList.remove("highlight"); });
+    function redrawAll(hoverIdx) {
+      panels.forEach(function(p) {
+        p.ctx.clearRect(0, 0, p.gridW, p.gridH);
+        pinnedSet.forEach(function(ci) {
+          drawHighlight(p, ci, "rgba(80, 180, 255, 0.45)", 1.5);
         });
-      }
-      function togglePin(coordIdx) {
-        var entry = coordinates[coordIdx];
-        if (!entry) return;
-        var first = overlayRects[0].get(coordIdx);
-        var wasPinned = first && first.classList.contains("pinned");
-        for (var i = 0; i < entry.length; i++) {
-          if (entry[i] === null) continue;
-          var rect = overlayRects[i].get(coordIdx);
-          if (rect) rect.classList.toggle("pinned", !wasPinned);
+        if (hoverIdx >= 0 && !pinnedSet.has(hoverIdx)) {
+          drawHighlight(p, hoverIdx, "rgba(255, 255, 80, 0.45)", 1.5);
         }
-      }
+      });
+    }
 
-      container.addEventListener("mouseenter", function(e) {
-        if (e.target.dataset.idx === undefined) return;
-        highlightAll(parseInt(e.target.dataset.idx, 10));
-      }, true);
-      container.addEventListener("mouseleave", function(e) {
-        if (e.target.dataset.idx === undefined) return;
-        clearHighlight();
-      }, true);
-      container.addEventListener("click", function(e) {
-        if (e.target.dataset.idx === undefined) return;
-        togglePin(parseInt(e.target.dataset.idx, 10));
-      }, true);
+    var currentHover = -1;
+
+    panels.forEach(function(p) {
+      p.canvas.addEventListener("mousemove", function(e) {
+        var idx = cellFromMouse(p, e);
+        if (idx !== currentHover) {
+          currentHover = idx;
+          redrawAll(currentHover);
+        }
+      });
+      p.canvas.addEventListener("mouseleave", function() {
+        currentHover = -1;
+        redrawAll(-1);
+      });
+      p.canvas.addEventListener("click", function(e) {
+        var idx = cellFromMouse(p, e);
+        if (idx < 0) return;
+        if (pinnedSet.has(idx)) pinnedSet.delete(idx);
+        else pinnedSet.add(idx);
+        redrawAll(currentHover);
+      });
     });
+
   }).catch(function(err) {
     container.innerHTML = '<div class="loading-msg">Failed to load ' + manifestURL + ' &mdash; ' + err.message + '</div>';
   });
