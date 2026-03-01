@@ -4,6 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Venndicon</title>
+<link rel="icon" type="image/svg+xml" href="my_venndicon.svg">
 <style>
   :root {
     --bg: #111;
@@ -268,9 +269,9 @@
   </button>
   <div class="nav-links" id="nav-links">
     <a href="#how">How It Works</a>
+    <a href="#gallery">Gallery</a>
     <a href="#matching">Image Matching</a>
     <a href="#hungarian">Hungarian Algorithm</a>
-    <a href="#gallery">Gallery</a>
     <a href="https://github.com/zemekeneng/venndicon">Fork me on GitHub</a>
   </div>
 </nav>
@@ -312,6 +313,30 @@
   <div id="seed-grid" class="demo-row"></div>
   <button onclick="regenerateGrid()">Regenerate with Random Seeds</button>
 </section>
+
+<!-- ============ GALLERY ============ -->
+<div class="viewer-section" id="gallery">
+  <div class="inner">
+    <h2>Gallery</h2>
+    <p>
+      These portraits are each composed entirely of venndicons &mdash; 6,400 for the square grids
+      and 6,348 for the taller one. Hover over any cell to see it highlighted; click to pin. In the
+      paired view (Dad &amp; Mom), the same venndicon is highlighted in both images simultaneously.
+    </p>
+  </div>
+
+  <h3 style="text-align:center;margin:32px 0 8px;">Ben (80&times;80)</h3>
+  <div id="viewer-ben" class="viewer-panels">
+    <div class="loading-msg">Loading matched_ben.svg&hellip;</div>
+  </div>
+  <p class="viewer-hint">Hover to highlight &middot; click to pin</p>
+
+  <h3 style="text-align:center;margin:32px 0 8px;">Dad &amp; Mom (shared pool &mdash; 80&times;80 / 69&times;92)</h3>
+  <div id="viewer-dadmom" class="viewer-panels">
+    <div class="loading-msg">Loading manifest.json&hellip;</div>
+  </div>
+  <p class="viewer-hint">Hover a cell in either image to see the same venndicon highlighted in both</p>
+</div>
 
 <!-- ============ MATCHING ============ -->
 <section id="matching">
@@ -458,37 +483,13 @@
 
   <h3>Multiple Images</h3>
   <p>
-    When matching the same pool of venndicons against multiple photographs (as in the gallery below),
+    When matching the same pool of venndicons against multiple photographs (as in the gallery above),
     a <em>shared pool</em> is generated once, and the Hungarian algorithm runs independently for each
     image. This means every image gets its own optimal arrangement of the same set of venndicons. The
-    viewer below lets you hover over a cell in one image and see where that same venndicon ended up
+    viewer above lets you hover over a cell in one image and see where that same venndicon ended up
     in the other &mdash; they travel to very different positions because each image has its own optimal layout.
   </p>
 </section>
-
-<!-- ============ GALLERY ============ -->
-<div class="viewer-section" id="gallery">
-  <div class="inner">
-    <h2>Gallery</h2>
-    <p>
-      These portraits are each composed entirely of venndicons &mdash; 6,400 for the square grids
-      and 6,348 for the taller one. Hover over any cell to see it highlighted; click to pin. In the
-      paired view (Dad &amp; Mom), the same venndicon is highlighted in both images simultaneously.
-    </p>
-  </div>
-
-  <h3 style="text-align:center;margin:32px 0 8px;">Ben (80&times;80)</h3>
-  <div id="viewer-ben" class="viewer-panels">
-    <div class="loading-msg">Loading matched_ben.svg&hellip;</div>
-  </div>
-  <p class="viewer-hint">Hover to highlight &middot; click to pin</p>
-
-  <h3 style="text-align:center;margin:32px 0 8px;">Dad &amp; Mom (shared pool &mdash; 80&times;80 / 69&times;92)</h3>
-  <div id="viewer-dadmom" class="viewer-panels">
-    <div class="loading-msg">Loading manifest.json&hellip;</div>
-  </div>
-  <p class="viewer-hint">Hover a cell in either image to see the same venndicon highlighted in both</p>
-</div>
 
 <!-- ============ SCRIPTS ============ -->
 <script>
