@@ -36,10 +36,37 @@
     padding: 10px 24px;
     display: flex; gap: 24px; align-items: center;
     font-size: 14px;
+    flex-wrap: wrap;
   }
   nav .brand { font-weight: 700; font-size: 16px; color: var(--text); text-decoration: none; }
   nav a { text-decoration: none; color: var(--text-dim); }
   nav a:hover { color: var(--text); }
+  .hamburger {
+    display: none;
+    background: none; border: none; border-radius: 0;
+    padding: 4px; color: var(--text-dim);
+    cursor: pointer; margin-left: auto;
+  }
+  .hamburger:hover { background: none; color: var(--text); }
+  .hamburger svg { display: block; }
+  .nav-links { display: contents; }
+  .nav-links a:last-child { margin-left: auto; }
+  @media (max-width: 640px) {
+    .nav-links a:last-child { margin-left: 0; }
+    .hamburger { display: block; }
+    .nav-links {
+      display: none;
+      flex-direction: column;
+      width: 100%;
+      gap: 0;
+      padding: 8px 0 4px;
+    }
+    .nav-links.open { display: flex; }
+    .nav-links a {
+      padding: 10px 0;
+      border-top: 1px solid var(--border);
+    }
+  }
 
   /* --- SECTIONS --- */
   section {
@@ -205,6 +232,7 @@
     display: block;
     max-height: calc(100vh - 160px);
     width: auto;
+    height: auto;
     max-width: 100%;
   }
   .viewer-panel-body canvas {
@@ -235,11 +263,16 @@
 
 <nav>
   <a class="brand" href="#">Venndicon</a>
-  <a href="#how">How It Works</a>
-  <a href="#matching">Image Matching</a>
-  <a href="#hungarian">Hungarian Algorithm</a>
-  <a href="#gallery">Gallery</a>
-  <a href="https://github.com/zemekeneng/venndicon" style="margin-left:auto;">Fork me on GitHub</a>
+  <button class="hamburger" id="hamburger-btn" aria-label="Menu">
+    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/></svg>
+  </button>
+  <div class="nav-links" id="nav-links">
+    <a href="#how">How It Works</a>
+    <a href="#matching">Image Matching</a>
+    <a href="#hungarian">Hungarian Algorithm</a>
+    <a href="#gallery">Gallery</a>
+    <a href="https://github.com/zemekeneng/venndicon">Fork me on GitHub</a>
+  </div>
 </nav>
 
 <!-- ============ HERO ============ -->
@@ -459,6 +492,20 @@
 
 <!-- ============ SCRIPTS ============ -->
 <script>
+/* ===== Hamburger nav toggle ===== */
+(function() {
+  var btn = document.getElementById("hamburger-btn");
+  var links = document.getElementById("nav-links");
+  btn.addEventListener("click", function(e) {
+    e.stopPropagation();
+    links.classList.toggle("open");
+  });
+  document.addEventListener("click", function() { links.classList.remove("open"); });
+  links.addEventListener("click", function(e) {
+    if (e.target.tagName === "A") links.classList.remove("open");
+  });
+})();
+
 /* ===== Seeded RNG (mulberry32) ===== */
 function mulberry32(a) {
   return function() {
